@@ -120,7 +120,7 @@ describe BitsClient do
     describe '#internal_download_url' do
       context 'when the download url leads to a redirect' do
         it 'resolves the redirect' do
-          request = stub_request(:head, File.join(public_endpoint, 'buildpacks/abc123')).
+          request = stub_request(:head, File.join(private_endpoint, 'buildpacks/abc123')).
                     to_return(status: 302, headers: { location: 'the-real-location' })
 
           url = subject.internal_download_url(:buildpacks, 'abc123')
@@ -132,12 +132,13 @@ describe BitsClient do
 
       context 'when the download url does not lead to a redirect' do
         it 'returns the original url' do
-          expected_url = File.join(public_endpoint, 'buildpacks/abc123')
-          request = stub_request(:head, expected_url).to_return(status: 200)
+          head_endpoint = File.join(private_endpoint, 'buildpacks/abc123')
+          request = stub_request(:head, head_endpoint).to_return(status: 200)
 
           actual_url = subject.internal_download_url(:buildpacks, 'abc123')
 
           expect(request).to have_been_requested
+          expected_url = File.join(public_endpoint, 'buildpacks/abc123')
           expect(actual_url).to eq(expected_url)
         end
       end
