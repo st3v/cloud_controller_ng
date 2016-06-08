@@ -536,6 +536,10 @@ module VCAP::CloudController
       CacheKeyPresenter.cache_key(guid: guid, stack_name: stack.name)
     end
 
+    def package_key
+      ::CloudController::DependencyLocator.instance.use_bits_service ? package_hash : guid
+    end
+
     def docker_image=(value)
       value = docker_image_with_tag_name(value)
       super
