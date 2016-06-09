@@ -34,5 +34,9 @@ module VCAP::CloudController
         where(AppModel.user_visibility_filter(user)).
         select_all(PackageModel.table_name)
     end
+
+    def package_key
+      ::CloudController::DependencyLocator.instance.use_bits_service ? package_hash : guid
+    end
   end
 end

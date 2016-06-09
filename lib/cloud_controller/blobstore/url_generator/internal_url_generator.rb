@@ -59,7 +59,7 @@ module CloudController
       end
 
       def package_download_url(package)
-        blob = @package_blobstore.blob(package.guid)
+        blob = @package_blobstore.blob(package.package_key)
         return nil unless blob
 
         url_for_blob(blob)

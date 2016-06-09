@@ -70,12 +70,6 @@ class BitsClient
     end
   end
 
-  def download_package(guid)
-    get(download_url(:packages, guid)).tap do |response|
-      validate_response_code!(200, response)
-    end
-  end
-
   def duplicate_package(guid)
     response = post('/packages', JSON.generate(source_guid: guid))
     validate_response_code!(201, response)
@@ -83,14 +77,23 @@ class BitsClient
   end
 
   def download_url(resource_type, guid)
-    File.join(public_endpoint.to_s, resource_path(resource_type, guid))
+    path = resource_path(resource_type, guid)
+
+    head(public_http_client, path).tap do |response|
+      return response['location'] if response.code.to_i == 302
+    end
+
+    File.join(public_endpoint.to_s, path)
   end
 
   def internal_download_url(resource_type, guid)
-    head(resource_path(resource_type, guid)).tap do |response|
+    path = resource_path(resource_type, guid)
+
+    head(private_http_client, path).tap do |response|
       return response['location'] if response.code.to_i == 302
     end
-    download_url(resource_type, guid)
+
+    File.join(private_endpoint.to_s, path)
   end
 
   def matches(resources_json)
@@ -150,44 +153,37 @@ class BitsClient
     raise Errors::FileDoesNotExist.new("Could not find file: #{file_path}")
   end
 
-  def head(path)
+  def head(http_client, path)
     request = Net::HTTP::Head.new(path)
-    do_request(request)
-  end
-
-  def get(path)
-    request = Net::HTTP::Get.new(path)
-    do_request(request)
+    do_request(http_client, request)
   end
 
   def post(path, body, header={})
     request = Net::HTTP::Post.new(path, header)
 
     request.body = body
-    do_request(request)
+    do_request(private_http_client, request)
   end
 
   def put(path, body, header={})
     request = Net::HTTP::Put::Multipart.new(path, body, header)
-    do_request(request)
+    do_request(private_http_client, request)
   end
 
   def multipart_post(path, body, header={})
     request = Net::HTTP::Post::Multipart.new(path, body, header)
-    do_request(request).tap do |response|
+    do_request(private_http_client, request).tap do |response|
       validate_response_code!(201, response)
     end
   end
 
   def delete(path)
     request = Net::HTTP::Delete.new(path)
-    do_request(request)
+    do_request(private_http_client, request)
   end
 
-  def do_request(request)
+  def do_request(http_client, request)
     request_id = SecureRandom.uuid
-
-    http_client = request.method == 'GET' ? public_http_client : private_http_client
 
     @logger.info('Request', {
       method: request.method,

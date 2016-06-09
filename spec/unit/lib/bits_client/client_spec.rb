@@ -77,6 +77,60 @@ describe BitsClient do
     end
   end
 
+  describe '#download_url' do
+    context 'when the download url leads to a redirect' do
+      it 'resolves the redirect' do
+        request = stub_request(:head, File.join(public_endpoint, 'buildpacks/abc123')).
+                  to_return(status: 302, headers: { location: 'the-real-location' })
+
+        url = subject.download_url(:buildpacks, 'abc123')
+
+        expect(request).to have_been_requested
+        expect(url).to eq('the-real-location')
+      end
+    end
+
+    context 'when the download url does not lead to a redirect' do
+      it 'returns the original url' do
+        head_endpoint = File.join(public_endpoint, 'buildpacks/abc123')
+        request = stub_request(:head, head_endpoint).to_return(status: 200)
+
+        actual_url = subject.download_url(:buildpacks, 'abc123')
+
+        expect(request).to have_been_requested
+        expected_url = File.join(public_endpoint, 'buildpacks/abc123')
+        expect(actual_url).to eq(expected_url)
+      end
+    end
+  end
+
+  describe '#internal_download_url' do
+    context 'when the download url leads to a redirect' do
+      it 'resolves the redirect' do
+        request = stub_request(:head, File.join(private_endpoint, 'buildpacks/abc123')).
+                  to_return(status: 302, headers: { location: 'the-real-location' })
+
+        url = subject.internal_download_url(:buildpacks, 'abc123')
+
+        expect(request).to have_been_requested
+        expect(url).to eq('the-real-location')
+      end
+    end
+
+    context 'when the download url does not lead to a redirect' do
+      it 'returns the original url' do
+        head_endpoint = File.join(private_endpoint, 'buildpacks/abc123')
+        request = stub_request(:head, head_endpoint).to_return(status: 200)
+
+        actual_url = subject.internal_download_url(:buildpacks, 'abc123')
+
+        expect(request).to have_been_requested
+        expected_url = File.join(private_endpoint, 'buildpacks/abc123')
+        expect(actual_url).to eq(expected_url)
+      end
+    end
+  end
+
   context 'Buildpack Cache' do
     describe '#upload_buildpack_cache' do
       let(:file_path) { Tempfile.new('buildpack').path }
@@ -107,40 +161,6 @@ describe BitsClient do
                   to_return(status: 204)
         subject.delete_all_buildpack_caches
         expect(request).to have_been_requested
-      end
-    end
-
-    describe '#download_url' do
-      it 'returns the bits-service download endpoint for the key' do
-        url = subject.download_url(:buildpack_cache, '1234/567')
-        expect(url).to eq(File.join(public_endpoint, 'buildpack_cache/entries/1234/567'))
-      end
-    end
-
-    describe '#internal_download_url' do
-      context 'when the download url leads to a redirect' do
-        it 'resolves the redirect' do
-          request = stub_request(:head, File.join(private_endpoint, 'buildpacks/abc123')).
-                    to_return(status: 302, headers: { location: 'the-real-location' })
-
-          url = subject.internal_download_url(:buildpacks, 'abc123')
-
-          expect(request).to have_been_requested
-          expect(url).to eq('the-real-location')
-        end
-      end
-
-      context 'when the download url does not lead to a redirect' do
-        it 'returns the original url' do
-          head_endpoint = File.join(private_endpoint, 'buildpacks/abc123')
-          request = stub_request(:head, head_endpoint).to_return(status: 200)
-
-          actual_url = subject.internal_download_url(:buildpacks, 'abc123')
-
-          expect(request).to have_been_requested
-          expected_url = File.join(public_endpoint, 'buildpacks/abc123')
-          expect(actual_url).to eq(expected_url)
-        end
       end
     end
   end
@@ -182,13 +202,6 @@ describe BitsClient do
             subject.upload_buildpack('/not-here', file_name)
           }.to raise_error(BitsClient::Errors::FileDoesNotExist)
         end
-      end
-    end
-
-    describe '#download_url' do
-      it 'returns the bits-service download endpoint for the guid' do
-        url = subject.download_url(:buildpacks, '1234')
-        expect(url).to eq(File.join(public_endpoint, 'buildpacks/1234'))
       end
     end
 
@@ -285,13 +298,6 @@ describe BitsClient do
         }.to raise_error(BitsClient::Errors::Error, /bits-failure/)
       end
     end
-
-    describe '#download_url' do
-      it 'returns the bits-service download endpoint for the guid' do
-        url = subject.download_url(:droplets, '1234')
-        expect(url).to eq(File.join(public_endpoint, 'droplets/1234'))
-      end
-    end
   end
 
   context 'Packages' do
@@ -361,33 +367,6 @@ describe BitsClient do
       end
     end
 
-    describe '#download_package' do
-      it 'makes the correct request to the bits endpoint' do
-        request = stub_request(:get, File.join(public_endpoint, "packages/#{guid}")).
-                  to_return(status: 200)
-
-        subject.download_package(guid)
-        expect(request).to have_been_requested
-      end
-
-      it 'returns the request response' do
-        stub_request(:get, File.join(public_endpoint, "packages/#{guid}")).
-          to_return(status: 200)
-
-        response = subject.download_package(guid)
-        expect(response).to be_a(Net::HTTPOK)
-      end
-
-      it 'raises an error when the response is not 20X' do
-        stub_request(:get, File.join(public_endpoint, "packages/#{guid}")).
-          to_return(status: 400, body: '{"description":"bits-failure"}')
-
-        expect {
-          subject.download_package(guid)
-        }.to raise_error(BitsClient::Errors::Error, /bits-failure/)
-      end
-    end
-
     describe '#duplicate_package' do
       let(:bsguid) { 'some-guid' }
       it 'makes the correct request to the bits endpoint' do
@@ -413,13 +392,6 @@ describe BitsClient do
         expect {
           subject.duplicate_package(guid)
         }.to raise_error(BitsClient::Errors::Error, /bits-failure/)
-      end
-    end
-
-    describe '#download_url' do
-      it 'returns the bits-service download endpoint for the guid' do
-        url = subject.download_url(:packages, '1234')
-        expect(url).to eq(File.join(public_endpoint, 'packages/1234'))
       end
     end
   end
