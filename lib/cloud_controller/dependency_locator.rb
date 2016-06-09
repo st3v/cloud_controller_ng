@@ -81,7 +81,9 @@ module CloudController
 
       Blobstore::ClientProvider.provide(
         options: options,
-        directory_key: options.fetch(:droplet_directory_key)
+        directory_key: options.fetch(:droplet_directory_key),
+        resource_type: :droplets,
+        bits_client: bits_client
       )
     end
 
