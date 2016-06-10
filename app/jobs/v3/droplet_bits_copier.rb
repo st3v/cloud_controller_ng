@@ -26,13 +26,19 @@ module VCAP::CloudController
         def copy_bits
           source_droplet = DropletModel.find(guid: @src_droplet_guid)
           raise 'source droplet does not exist' unless source_droplet
+          dest_droplet_hash = source_droplet.droplet_hash
 
-          CloudController::DependencyLocator.instance.droplet_blobstore.
-            cp_file_between_keys(source_droplet.blobstore_key, destination_droplet.blobstore_key(source_droplet.droplet_hash))
+          bits_client = CloudController::DependencyLocator.instance.bits_client
+          if bits_client
+            dest_droplet_hash = bits_client.duplicate_droplet(source_droplet.droplet_hash)
+          else
+            CloudController::DependencyLocator.instance.droplet_blobstore.
+              cp_file_between_keys(source_droplet.blobstore_key, destination_droplet.blobstore_key(source_droplet.droplet_hash))
+          end
 
           destination_droplet.db.transaction do
             destination_droplet.lock!
-            destination_droplet.droplet_hash = source_droplet.droplet_hash
+            destination_droplet.droplet_hash = dest_droplet_hash
             destination_droplet.state = source_droplet.state
             destination_droplet.save
           end

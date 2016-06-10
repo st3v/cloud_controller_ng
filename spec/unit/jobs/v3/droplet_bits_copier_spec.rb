@@ -53,6 +53,48 @@ module VCAP::CloudController
           expect(destination_droplet.state).to eq(source_droplet.state)
         end
 
+        context 'when using bits-service' do
+          let(:bits_client) { double(BitsClient) }
+          let(:dest_droplet_guid) { 'some-droplet-guid' }
+
+          before do
+            allow(CloudController::DependencyLocator.instance).to receive(:bits_client).and_return(bits_client)
+            allow(bits_client).to receive(:duplicate_droplet).and_return(dest_droplet_guid)
+          end
+
+          it 'does not call blobstore.cp' do
+            expect(droplet_blobstore).not_to receive(:cp_file_between_keys)
+            job.perform
+          end
+
+          it 'calls duplicate_droplet on bits_client' do
+            expect(bits_client).to receive(:duplicate_droplet).with(source_droplet.droplet_hash)
+            job.perform
+          end
+
+          it 'sets the droplet_hash for the destination droplet' do
+            expect { job.perform }.to change { destination_droplet.refresh.droplet_hash }.to(dest_droplet_guid)
+          end
+
+          it 'sets the state for the destination droplet to READY' do
+            expect { job.perform }.to change { destination_droplet.refresh.state }.to(VCAP::CloudController::DropletModel::STAGING_STATE)
+          end
+
+          context 'and duplicate_droplet fails' do
+            let(:expected_error) { 'some-error' }
+
+            before do
+              allow(bits_client).to receive(:duplicate_droplet).and_raise(expected_error)
+            end
+
+            it 'sets the state for the destination droplet to FAILED' do
+              expect { job.perform }.to raise_error(expected_error)
+              expect(destination_droplet.refresh.state).to eq(VCAP::CloudController::DropletModel::FAILED_STATE)
+              expect(destination_droplet.error).to eq("failed to copy - #{expected_error}")
+            end
+          end
+        end
+
         context 'when the copy fails' do
           before do
             allow(droplet_blobstore).to receive(:cp_file_between_keys).and_raise('ba boom!')

@@ -298,6 +298,34 @@ describe BitsClient do
         }.to raise_error(BitsClient::Errors::Error, /bits-failure/)
       end
     end
+
+    describe '#duplicate_droplet' do
+      let(:bsguid) { 'some-guid' }
+      it 'makes the correct request to the bits endpoint' do
+        request = stub_request(:post, File.join(private_endpoint, 'droplets')).
+                  with(body: JSON.generate('source_guid' => guid)).
+                  to_return(status: 201, body: "{\"guid\":\"#{bsguid}\"}")
+
+        subject.duplicate_droplet(guid)
+        expect(request).to have_been_requested
+      end
+
+      it 'returns the request response' do
+        stub_request(:post, File.join(private_endpoint, 'droplets')).to_return(status: 201, body: "{\"guid\":\"#{bsguid}\"}")
+
+        response_guid = subject.duplicate_droplet(guid)
+        expect(response_guid).to eq(bsguid)
+      end
+
+      it 'raises an error when the response is not 201' do
+        stub_request(:post, File.join(private_endpoint, 'droplets')).
+          to_return(status: 400, body: '{"description":"bits-failure"}')
+
+        expect {
+          subject.duplicate_droplet(guid)
+        }.to raise_error(BitsClient::Errors::Error, /bits-failure/)
+      end
+    end
   end
 
   context 'Packages' do

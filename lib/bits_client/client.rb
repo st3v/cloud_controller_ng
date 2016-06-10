@@ -76,6 +76,12 @@ class BitsClient
     JSON.parse(response.body)['guid']
   end
 
+  def duplicate_droplet(guid)
+    response = post('/droplets', JSON.generate(source_guid: guid))
+    validate_response_code!(201, response)
+    JSON.parse(response.body)['guid']
+  end
+
   def download_url(resource_type, guid)
     path = resource_path(resource_type, guid)
 
