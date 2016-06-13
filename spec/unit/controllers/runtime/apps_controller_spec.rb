@@ -1147,18 +1147,6 @@ module VCAP::CloudController
           expect(last_response.header['Location']).to eq(url)
         end
 
-        context 'when using nginx' do
-          before do
-            TestConfig.override(nginx: { use_nginx: true })
-          end
-
-          it 'uses nginx to redirect internally' do
-            get "/v2/apps/#{app_obj.guid}/droplet/download", '', json_headers(admin_headers)
-            expect(last_response.status).to eq(200)
-            expect(last_response.headers.fetch('X-Accel-Redirect')).to eq("/bits_redirect/#{url}")
-          end
-        end
-
         context 'when app does not exist' do
           it 'returns an error' do
             get '/v2/apps/not-a-thing-app/droplet/download', '', json_headers(admin_headers)

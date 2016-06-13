@@ -141,7 +141,6 @@ module VCAP::CloudController
         raise CloudController::Errors::BlobNotFound unless droplet && droplet.droplet_hash
         url = @bits_client.download_url(:droplets, droplet.droplet_hash)
         raise CloudController::Errors::BlobNotFound unless url
-        #return [200, { 'X-Accel-Redirect' => "/bits_redirect/#{url}" }, nil] if @config[:nginx][:use_nginx]
         redirect url
       end
 
