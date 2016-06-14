@@ -31,12 +31,20 @@ module VCAP::CloudController
 
       it 'can set billing_enabled' do
         object.billing_enabled = !object.billing_enabled
-        expect(subject.update?(object)).to be_truthy
+        expect(subject.update?(object)).to be true
       end
 
       it 'can set quota_definition' do
         object.quota_definition = QuotaDefinition.make
-        expect(subject.update?(object)).to be_truthy
+        expect(subject.update?(object)).to be true
+      end
+
+      it 'can read related objects' do
+        expect(subject.read_related_object_for_update?(object)).to be true
+      end
+
+      it 'can update related objects' do
+        expect(subject.update_related_object?(object)).to be true
       end
     end
 
@@ -63,12 +71,20 @@ module VCAP::CloudController
 
       it 'cannot set billing_enabled' do
         object.billing_enabled = !object.billing_enabled
-        expect(subject.read_for_update?(object, { 'billing_enabled' => 1 })).to be_falsey
+        expect(subject.read_for_update?(object, { 'billing_enabled' => 1 })).to be false
       end
 
       it 'cannot set quota_definition' do
         object.quota_definition = QuotaDefinition.make
-        expect(subject.read_for_update?(object, { 'quota_definition_guid' => 1 })).to be_falsey
+        expect(subject.read_for_update?(object, { 'quota_definition_guid' => 1 })).to be false
+      end
+
+      it 'can read related objects' do
+        expect(subject.read_related_object_for_update?(object)).to be true
+      end
+
+      it 'can update related objects' do
+        expect(subject.update_related_object?(object)).to be true
       end
     end
 
@@ -76,6 +92,46 @@ module VCAP::CloudController
       before { object.add_user(user) }
 
       it_behaves_like :read_only_access
+
+      context 'a user' do
+        let(:relation) { :users }
+
+        context 'who is the user' do
+          let(:related) { user }
+
+          it 'can read the user' do
+            params = { relation: relation, related_guid: related.guid }
+            expect(subject.read_related_object_for_update?(object, params)).to be true
+          end
+
+          context 'when removing' do
+            let(:verb) { 'remove' }
+
+            it 'can update the user' do
+              params = { verb: verb, relation: relation, related_guid: related.guid }
+              expect(subject.update_related_object?(object, params)).to be true
+            end
+          end
+        end
+
+        context 'who is not the user' do
+          let(:related) { User.make }
+
+          it 'cannot read the user' do
+            params = { relation: relation, related_guid: related.guid }
+            expect(subject.read_related_object_for_update?(object, params)).to be false
+          end
+
+          context 'when removing' do
+            let(:verb) { 'remove' }
+
+            it 'cannot update the user' do
+              params = { verb: verb, relation: relation, related_guid: related.guid }
+              expect(subject.update_related_object?(object, params)).to be false
+            end
+          end
+        end
+      end
     end
 
     context 'a user not in the organization' do

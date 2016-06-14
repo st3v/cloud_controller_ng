@@ -187,7 +187,8 @@ module VCAP::CloudController
     def remove_related(guid, name, other_guid)
       model.db.transaction do
         if recursive_delete? && name.to_s.eql?('users')
-          org = find_guid_and_validate_access(:update, guid)
+          org = find_guid(guid, model)
+          validate_access(:update_related_object, org, { verb: 'remove', relation: name, related_guid: other_guid })
           user = User.find(guid: other_guid)
 
           org.remove_user_recursive(user)

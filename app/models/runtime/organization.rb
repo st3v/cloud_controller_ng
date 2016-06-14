@@ -135,6 +135,24 @@ module VCAP::CloudController
       validates_includes ORG_STATUS_VALUES, :status, allow_missing: true
     end
 
+    def validate_remove_billing_manager_by_guid!(_user_guid)
+      return if SecurityContext.admin?
+      return if billing_managers.count > 1
+      raise CloudController::Errors::ApiError.new_from_details('LastBillingManagerInOrg')
+    end
+
+    def validate_remove_manager_by_guid!(_user_guid)
+      return if SecurityContext.admin?
+      return if managers.count > 1
+      raise CloudController::Errors::ApiError.new_from_details('LastManagerInOrg')
+    end
+
+    def validate_remove_user_by_guid!(_user_guid)
+      return if SecurityContext.admin?
+      return if users.count > 1
+      raise CloudController::Errors::ApiError.new_from_details('LastUserInOrg')
+    end
+
     def has_remaining_memory(mem)
       memory_remaining >= mem
     end
