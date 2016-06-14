@@ -249,6 +249,110 @@ describe 'Apps' do
     end
   end
 
+  describe 'GET /v2/apps/:guid/summary' do
+    let!(:process) { VCAP::CloudController::AppFactory.make(space: space, name: 'woo') }
+
+    it 'gives a summary of the specified app' do
+      private_domains = process.space.organization.private_domains
+      shared_domains = VCAP::CloudController::SharedDomain.all.collect do |domain|
+        { 'guid' => domain.guid,
+          'name' => domain.name,
+          'router_group_guid' => domain.router_group_guid,
+          'router_group_type' => domain.router_group_type,
+        }
+      end
+      avail_domains = private_domains + shared_domains
+
+      get "/v2/apps/#{process.guid}/summary", nil, headers_for(user)
+
+      expect(last_response.status).to eq(200)
+      expect(MultiJson.load(last_response.body)).to be_a_response_like(
+        {
+          'guid'                       => process.guid,
+          'name'                       => 'woo',
+          'routes'                     => [],
+          'running_instances'          => 0,
+          'services'                   => [],
+          'available_domains'          => avail_domains,
+          'production'                 => false,
+          'space_guid'                 => space.guid,
+          'stack_guid'                 => process.stack.guid,
+          'buildpack'                  => nil,
+          'detected_buildpack'         => nil,
+          'environment_json'           => nil,
+          'memory'                     => 1024,
+          'instances'                  => 1,
+          'disk_quota'                 => 1024,
+          'state'                      => 'STOPPED',
+          'version'                    => process.version,
+          'command'                    => nil,
+          'console'                    => false,
+          'debug'                      => nil,
+          'staging_task_id'            => nil,
+          'package_state'              => 'PENDING',
+          'health_check_type'          => 'port',
+          'health_check_timeout'       => nil,
+          'staging_failed_reason'      => nil,
+          'staging_failed_description' => nil,
+          'diego'                      => false,
+          'docker_image'               => nil,
+          'package_updated_at'         => iso8601,
+          'detected_start_command'     => '',
+          'enable_ssh'                 => true,
+          'docker_credentials_json'    => {'redacted_message' => '[PRIVATE DATA HIDDEN]'},
+          'ports'                      => nil
+        })
+    end
+  end
+
+  describe 'GET /v2/apps/:guid/service_bindings' do
+    let!(:process) { VCAP::CloudController::AppFactory.make }
+    let!(:admin) { VCAP::CloudController::User.make(admin: true) }
+    let!(:service_instance) { VCAP::CloudController::ManagedServiceInstance.make(space: process.space) }
+    let!(:service_binding) { VCAP::CloudController::ServiceBinding.make(service_instance: service_instance, app: process) }
+
+
+    before do
+      service_instance.add_service_binding(service_binding)
+    end
+
+    it 'lists the service bindings associated with the app' do
+      get "/v2/apps/#{process.guid}/service_bindings", nil, admin_headers_for(admin)
+
+      parsed_response = MultiJson.load(last_response.body)
+
+      expect(last_response.status).to eq 200
+      expect(parsed_response['total_results']).to be(1)
+      expect(parsed_response['resources'][0]['entity']['app_guid']).to eq(process.guid)
+      expect(parsed_response['resources'][0]['entity']['service_instance_guid']).to eq(service_instance.guid)
+    end
+  end
+
+  describe 'GET /v2/apps/:guid/instances' do
+    let!(:admin) { VCAP::CloudController::User.make(admin: true) }
+    let!(:process) { VCAP::CloudController::AppFactory.make(diego: true, state: 'STARTED', package_state: 'STAGED', instances: 2) }
+    let(:tps_url) { "http://tps.service.cf.internal:1518/v1/actual_lrps/#{process.guid}-#{process.version}" }
+    let(:instances) { [
+      { process_guid: process.guid, instance_guid: 'instance-A', index: 0, state: 'RUNNING', uptime: 0 },
+      { process_guid: process.guid, instance_guid: 'instance-A', index: 1, state: 'RUNNING', uptime: 0 }
+    ]}
+
+    before do
+      stub_request(:get, tps_url).with(:headers => {'Accept'=>'*/*', 'Accept-Encoding'=>'gzip;q=1.0,deflate;q=0.6,identity;q=0.3', 'User-Agent'=>'Ruby'}).
+        to_return(:status => 200, body: instances.to_json)
+    end
+
+    it 'gets the instance information for a started app' do
+      get "/v2/apps/#{process.guid}/instances", nil, admin_headers_for(admin)
+      parsed_response = MultiJson.load(last_response.body)
+
+      expect(last_response.status).to eq(200)
+      expect(parsed_response.length).to eq 2
+      expect(parsed_response['0']['state']).to eq 'RUNNING'
+      expect(parsed_response['1']['state']).to eq 'RUNNING'
+    end
+  end
+
   describe 'POST /v2/apps' do
     it 'creates an app' do
       post_params = MultiJson.dump({
@@ -315,6 +419,19 @@ describe 'Apps' do
     end
   end
 
+  describe 'POST /v2/apps/:guid/copy_bits' do
+    let!(:source_process) { VCAP::CloudController::AppFactory.make(space: space) }
+    let!(:destination_process) { VCAP::CloudController::AppFactory.make(space: space) }
+
+    it 'queues a job to copy the bits' do
+      post "/v2/apps/#{destination_process.guid}/copy_bits", MultiJson.dump({source_app_guid: source_process.guid}), headers_for(user)
+
+      expect(last_response.status).to eq(201)
+      parsed_response = MultiJson.load(last_response.body)
+      expect(parsed_response['entity']['status']).to eq 'queued'
+    end
+  end
+
   describe 'PUT /v2/apps/:guid' do
     let!(:process) {
       VCAP::CloudController::AppFactory.make(
@@ -327,14 +444,14 @@ describe 'Apps' do
     }
 
     it 'updates an app' do
-      post_params = MultiJson.dump({
+      update_params = MultiJson.dump({
         name:       'maria',
         environment_json: { 'RAILS_ENV' => 'production' },
         state: 'STARTED',
         detected_start_command: 'argh'
       })
 
-      put "/v2/apps/#{process.guid}", post_params, headers_for(user)
+      put "/v2/apps/#{process.guid}", update_params, headers_for(user)
 
       process.reload
       expect(last_response.status).to eq(201)
@@ -388,6 +505,39 @@ describe 'Apps' do
           }
         }
       )
+    end
+  end
+
+  describe 'PUT /v2/apps/:guid/routes/:route_guid' do
+    let!(:process) { VCAP::CloudController::AppFactory.make(space: space) }
+    let!(:route) { VCAP::CloudController::Route.make(space: space) }
+
+    it 'associates an app and a route' do
+      put "/v2/apps/#{process.guid}/routes/#{route.guid}", nil, headers_for(user)
+      process.reload
+
+      expect(last_response.status).to eq(201)
+
+      get "/v2/apps/#{process.guid}/route_mappings", nil, headers_for(user)
+      parsed_response = MultiJson.load(last_response.body)
+
+      expect(parsed_response['total_results']).to eq 1
+      expect(parsed_response['resources'][0]['entity']['route_guid']).to eq(route.guid)
+    end
+  end
+
+  describe 'DELETE /v2/apps/:guid' do
+    let!(:process) { VCAP::CloudController::AppFactory.make(space: space) }
+
+    it 'deletes the specified app' do
+      delete "/v2/apps/#{process.guid}", nil, headers_for(user)
+
+      expect(last_response.status).to eq(204)
+
+      get "/v2/apps/#{process.guid}", nil, headers_for(user)
+      parsed_response = MultiJson.load(last_response.body)
+
+      expect(parsed_response['error_code']).to eq 'CF-AppNotFound'
     end
   end
 end
