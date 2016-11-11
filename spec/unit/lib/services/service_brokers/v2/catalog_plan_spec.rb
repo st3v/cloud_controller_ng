@@ -5,11 +5,12 @@ module VCAP::Services::ServiceBrokers::V2
   RSpec.describe CatalogPlan do
     def build_valid_plan_attrs(opts={})
       {
-        'id'          => opts[:id] || 'broker-provided-plan-id',
-        'metadata'    => opts[:metadata] || {},
-        'name'        => opts[:name] || 'service-plan-name',
-        'description' => opts[:description] || 'The description of the service plan',
-        'free'        => opts.fetch(:free, true)
+        'id'               => opts[:id] || 'broker-provided-plan-id',
+        'metadata'         => opts[:metadata] || {},
+        'name'             => opts[:name] || 'service-plan-name',
+        'description'      => opts[:description] || 'The description of the service plan',
+        'free'             => opts.fetch(:free, true),
+        'provision_schema' => opts[:provision_schema]
       }
     end
 
@@ -100,6 +101,43 @@ module VCAP::Services::ServiceBrokers::V2
         plan.valid?
 
         expect(plan.errors.messages).to include 'Plan free must be a boolean, but has value "true"'
+      end
+
+      it 'validates correct provision schema' do
+        attrs = build_valid_plan_attrs(
+          provision_schema: '{ "type": "object", "properties": { "a": { "type": "string" } }, "required": ["a"] }'
+        )
+
+        plan = CatalogPlan.new(instance_double(VCAP::CloudController::ServiceBroker), attrs)
+        plan.valid?
+
+        expect(plan.errors.messages).to be_empty
+      end
+
+      it 'validates that provision schema has the correct type' do
+        attrs = build_valid_plan_attrs(
+          provision_schema: '{ "type": "object", "properties": { "a": { "$ref": "external.json#/a" } } }'
+        )
+
+        plan = CatalogPlan.new(instance_double(VCAP::CloudController::ServiceBroker), attrs)
+        plan.valid?
+
+        expect(plan.errors.messages).to have(1).item
+        expect(plan.errors.messages[0]).to start_with 'Plan provision schema must be a valid broker parameter schema'
+        expect(plan.errors.messages[0]).to include 'Couldn\'t resolve references'
+      end
+
+      it 'validates that provision schema has the correct type' do
+        attrs = build_valid_plan_attrs(
+          provision_schema: '{ "properties": { "a": { "type": "string" } }, "required": ["a"] }'
+        )
+
+        plan = CatalogPlan.new(instance_double(VCAP::CloudController::ServiceBroker), attrs)
+        plan.valid?
+
+        expect(plan.errors.messages).to have(1).item
+        expect(plan.errors.messages[0]).to start_with 'Plan provision schema must be a valid broker parameter schema'
+        expect(plan.errors.messages[0]).to include ''
       end
 
       describe '#valid?' do

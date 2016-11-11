@@ -1,3 +1,6 @@
+require 'json'
+require 'json_schema'
+
 module VCAP::Services::ServiceBrokers::V2
   module CatalogValidationHelper
     def validate_string!(name, input, opts={})
@@ -52,6 +55,24 @@ module VCAP::Services::ServiceBrokers::V2
         errors_count = errors.messages.count
         send(validation)
         break if errors_count != errors.messages.count
+      end
+    end
+
+    def validate_schema!(name, json_schema, json_meta_schema)
+      return unless json_schema #schema is optional
+
+      begin
+        schema_data = JSON.parse(json_schema)
+        schema = JsonSchema.parse!(schema_data)
+        schema.expand_references!
+
+        meta_schema_data = JSON.parse(json_meta_schema)
+        meta_schema = JsonSchema.parse!(meta_schema_data)
+        meta_schema.expand_references!
+
+        meta_schema.validate!(schema_data)
+      rescue StandardError => e
+        errors.add("#{human_readable_attr_name(name)} must be a valid broker parameter schema, #{e.message}")
       end
     end
 

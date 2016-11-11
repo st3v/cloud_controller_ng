@@ -59,11 +59,12 @@ module VCAP::Services::ServiceBrokers
         end
 
         plan.set({
-          name:        catalog_plan.name,
-          description: catalog_plan.description,
-          free:        catalog_plan.free,
-          active:      true,
-          extra:       catalog_plan.metadata ? catalog_plan.metadata.to_json : nil
+          name:             catalog_plan.name,
+          description:      catalog_plan.description,
+          free:             catalog_plan.free,
+          active:           true,
+          extra:            catalog_plan.metadata ? catalog_plan.metadata.to_json : nil,
+          provision_schema: catalog_plan.provision_schema
         })
         @services_event_repository.with_service_plan_event(plan) do
           plan.save(changed: true)

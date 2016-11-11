@@ -1,4 +1,6 @@
 module VCAP::CloudController
+  DEFAULT_SCHEMA = '{ "type": "object" }'
+
   class ServicePlan < Sequel::Model
     many_to_one :service
     one_to_many :service_instances
@@ -6,9 +8,9 @@ module VCAP::CloudController
 
     add_association_dependencies service_plan_visibilities: :destroy
 
-    export_attributes :name, :free, :description, :service_guid, :extra, :unique_id, :public, :active
+    export_attributes :name, :free, :description, :service_guid, :extra, :unique_id, :public, :active, :provision_schema #, :update_schema, :bind_schema
 
-    import_attributes :name, :free, :description, :service_guid, :extra, :unique_id, :public
+    import_attributes :name, :free, :description, :service_guid, :extra, :unique_id, :public, :provision_schema #, :update_schema, :bind_schema
 
     strip_attributes :name
 
@@ -17,6 +19,8 @@ module VCAP::CloudController
     alias_method :active?, :active
 
     alias_method :broker_provided_id, :unique_id
+
+    alias_method :get_provision_schema, :provision_schema
 
     def validate
       validates_presence :name,                message: 'is required'
@@ -64,6 +68,18 @@ module VCAP::CloudController
     def broker_private?
       service_broker.private? if service_broker
     end
+
+    def get_provision_schema
+      self.provision_schema || DEFAULT_SCHEMA
+    end
+
+    # def update_schema
+    #   self.update_schema || DEFAULT_SCHEMA
+    # end
+
+    # def bind_schema
+    #   self.bind_schema || DEFAULT_SCHEMA
+    # end
 
     private
 
